@@ -6,10 +6,10 @@ export const config = {
 
   // Physics
   gravity: 0.3,
-  damping: 0.95, // velocity multiplier per frame (1 = no damping)
+  damping: 0.9, // velocity multiplier per frame (1 = no damping)
   constraintIterations: 10, // Jakobsen passes per frame — higher = stiffer chain
   linkRestLength: 12, // px distance between chain particles
-  pointRadius: 14,   // collision radius per point — should be ~half the font size to prevent overlap
+  pointRadius: 14, // collision radius per point — should be ~half the font size to prevent overlap
 
   // Circle obstacle
   circleColor: "#000000",
