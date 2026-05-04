@@ -1,6 +1,6 @@
 export const config = {
   // Typography
-  fontSize: 24,
+  fontSize: 32,
   fontFamily: 'Georgia, "Times New Roman", serif',
   textColor: "#000000",
 
