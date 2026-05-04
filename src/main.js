@@ -72,10 +72,13 @@ class Chain {
       totalArc += d;
     }
 
-    let cursor = (totalArc - textTotalWidth) * 0.5;
+    const spaceCount = chars.filter((c) => c === " ").length;
+    const extraPerSpace = spaceCount > 0 ? (totalArc - textTotalWidth) / spaceCount : 0;
+
+    let cursor = 0;
 
     for (let ci = 0; ci < chars.length; ci++) {
-      const cw = charWidths[ci];
+      const cw = charWidths[ci] + (chars[ci] === " " ? extraPerSpace : 0);
       const pos = cursor + cw * 0.5;
       cursor += cw;
 
@@ -191,24 +194,85 @@ function solve(chains, circleX, circleY, circleR, floorY) {
 
 let chains = [];
 
+function wrapText(text, maxWidth) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const n = words.length;
+  if (n === 0) return [];
+
+  // precompute cumulative widths for O(1) line-width queries
+  const wordW = words.map((w) => ctx.measureText(w).width);
+  const spaceW = ctx.measureText(" ").width;
+
+  // dp[i] = min cost to place words[0..i-1]; breaks[i] = start word of last line ending at i
+  const INF = Infinity;
+  const cost = new Array(n + 1).fill(INF);
+  const breaks = new Array(n + 1).fill(0);
+  cost[0] = 0;
+
+  for (let i = 1; i <= n; i++) {
+    let lineW = 0;
+    for (let j = i; j >= 1; j--) {
+      lineW += wordW[j - 1];
+      if (j < i) lineW += spaceW;
+      if (lineW > maxWidth && j < i) break; // too wide, no point going further back
+      const isLast = i === n;
+      const slack = maxWidth - lineW;
+      const ratio = slack / maxWidth; // 0 = full, 1 = empty
+      // cube penalty: lines below ~85% fill cost disproportionately more,
+      // forcing the breaker to reflow neighbours rather than leave sparse lines
+      const lineCost = isLast ? 0 : Math.pow(ratio, 3) * 1e7;
+      const total = cost[j - 1] + lineCost;
+      if (total < cost[i]) {
+        cost[i] = total;
+        breaks[i] = j - 1; // words[j-1..i-1] go on this line
+      }
+    }
+  }
+
+  // reconstruct lines
+  const result = [];
+  let end = n;
+  while (end > 0) {
+    const start = breaks[end];
+    result.unshift(words.slice(start, end).join(" "));
+    end = start;
+  }
+  return result;
+}
+
 function init() {
   const W = canvas.width;
   const H = canvas.height;
+  const maxW = W * (1 - config.textMarginX * 2);
+
+  ctx.font = `${config.fontSize}px ${config.fontFamily}`;
+
+  const words = textSource.replace(/\n/g, " ");
+  const lines = wrapText(words, maxW);
+
   const marginX = W * config.textMarginX;
-  const lineW = W - marginX * 2;
-
-  const lines = textSource
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
   chains = lines.map((text, i) => {
+    const textW = ctx.measureText(text).width;
+    const isLast = i === lines.length - 1;
+    const chainW = isLast ? textW : maxW;
     const y = H * config.textStartY + i * H * config.lineSpacingY;
-    return new Chain(text, marginX, y, lineW);
+    return new Chain(text, marginX, y, chainW);
   });
 }
 
 init();
+
+let frozen = true;
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    frozen = !frozen;
+  }
+  if (e.code === "KeyR") {
+    frozen = true;
+    init();
+  }
+});
 
 // ---- Loop ---- //
 
@@ -220,8 +284,10 @@ function loop() {
   const cr = config.circleDiameter * 0.5;
   const floor = H * config.floorY;
 
-  for (const chain of chains) {
-    for (const p of chain.points) p.integrate(config.gravity, config.damping);
+  if (!frozen) {
+    for (const chain of chains) {
+      for (const p of chain.points) p.integrate(config.gravity, config.damping);
+    }
   }
 
   solve(chains, cx, cy, cr, floor);
