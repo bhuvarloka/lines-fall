@@ -100,25 +100,21 @@ class Chain {
 
 // All constraints run together each iteration so they can't fight each other.
 function solve(chains, circleX, circleY, circleR, floorY) {
-  const linkLen    = config.linkRestLength;
-  const pointR     = config.pointRadius;
-  const minDist    = pointR * 2;
-  const minDist2   = minDist * minDist;
-  const W          = canvas.width;
-  const iters      = config.constraintIterations;
-
-  // flatten all points once for inter-chain pass
-  const allPoints = chains.flatMap(c => c.points);
+  const linkLen  = config.linkRestLength;
+  const minDist  = config.pointRadius * 2;
+  const minDist2 = minDist * minDist;
+  const W        = canvas.width;
+  const iters    = config.constraintIterations;
 
   for (let iter = 0; iter < iters; iter++) {
     // intra-chain link constraints
     for (const chain of chains) {
       const pts = chain.points;
       for (let i = 0; i < pts.length - 1; i++) {
-        const a  = pts[i];
-        const b  = pts[i + 1];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
+        const a    = pts[i];
+        const b    = pts[i + 1];
+        const dx   = b.x - a.x;
+        const dy   = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
         const diff = (dist - linkLen) / dist * 0.5;
         a.x += dx * diff;
@@ -128,27 +124,35 @@ function solve(chains, circleX, circleY, circleR, floorY) {
       }
     }
 
-    // inter-chain point separation
-    for (let i = 0; i < allPoints.length - 1; i++) {
-      for (let j = i + 1; j < allPoints.length; j++) {
-        const a  = allPoints[i];
-        const b  = allPoints[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < minDist2 && d2 > 0) {
-          const d    = Math.sqrt(d2);
-          const push = (minDist - d) / d * 0.5;
-          a.x -= dx * push;
-          a.y -= dy * push;
-          b.x += dx * push;
-          b.y += dy * push;
+    // point separation — both within each chain (self-collision) and between chains
+    // skip immediate neighbors (j <= i+1) since the link constraint already handles those
+    for (let ci = 0; ci < chains.length; ci++) {
+      const pa = chains[ci].points;
+      for (let cj = ci; cj < chains.length; cj++) {
+        const pb = chains[cj].points;
+        for (let i = 0; i < pa.length; i++) {
+          const jMin = (ci === cj) ? i + 2 : 0; // skip self and immediate neighbor
+          for (let j = jMin; j < pb.length; j++) {
+            const a  = pa[i];
+            const b  = pb[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < minDist2 && d2 > 0) {
+              const d    = Math.sqrt(d2);
+              const push = (minDist - d) / d * 0.15;
+              a.x -= dx * push;
+              a.y -= dy * push;
+              b.x += dx * push;
+              b.y += dy * push;
+            }
+          }
         }
       }
     }
 
     // boundary constraints — last so they're never overridden
-    for (const p of allPoints) {
+    for (const chain of chains) for (const p of chain.points) {
       const dx   = p.x - circleX;
       const dy   = p.y - circleY;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -206,7 +210,7 @@ function loop() {
   ctx.fillStyle = config.backgroundColor;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.fillStyle = '#000000';
+  ctx.fillStyle = config.floorColor;
   ctx.fillRect(0, floor, W, H - floor);
 
   ctx.beginPath();
