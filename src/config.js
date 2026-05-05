@@ -1,7 +1,8 @@
 export const config = {
   // Typography
-  fontSize: 24, // px
-  fontFamily: 'Georgia, "Times New Roman", serif',
+  fontSize: 32, // px
+  // fontFamily: 'Georgia, "Times New Roman", serif',
+  fontFamily: 'Arial, "Times New Roman", serif',
   textColor: "#000000",
 
   // Physics
