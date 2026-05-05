@@ -164,19 +164,21 @@ function solve(chains, circleX, circleY, circleR, floorY) {
     // boundary constraints — last so they're never overridden
     for (const chain of chains)
       for (const p of chain.points) {
+        const halfGlyph = config.fontSize * 0.3;
         const dx = p.x - circleX;
         const dy = p.y - circleY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < circleR && dist > 0) {
-          p.x = circleX + (dx / dist) * circleR;
-          p.y = circleY + (dy / dist) * circleR;
+        if (dist < circleR + halfGlyph && dist > 0) {
+          const push = circleR + halfGlyph;
+          p.x = circleX + (dx / dist) * push;
+          p.y = circleY + (dy / dist) * push;
           p.px = p.x - (p.x - p.px) * config.circleFriction;
           p.py = p.y - (p.y - p.py) * config.circleFriction;
         }
 
-        if (p.y > floorY) {
-          p.y = floorY;
-          p.py = floorY;
+        if (p.y > floorY - halfGlyph) {
+          p.y = floorY - halfGlyph;
+          p.py = floorY - halfGlyph;
         }
         if (p.x < 0) {
           p.x = 0;
