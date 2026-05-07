@@ -2,8 +2,14 @@ import { config } from "./config.js";
 import textSource from "./text.txt?raw";
 
 const canvas = document.createElement("canvas");
-const ctx = canvas.getContext("2d");
-document.getElementById("canvas-container").appendChild(canvas);
+const ctx =
+  canvas.getContext("2d", { alpha: false, desynchronized: true }) ??
+  canvas.getContext("2d");
+if (!ctx) throw new Error("Could not acquire 2D canvas context");
+
+const container = document.getElementById("canvas-container");
+if (!container) throw new Error("Missing #canvas-container");
+container.appendChild(canvas);
 
 // ---- Sizing ---- //
 
@@ -12,10 +18,20 @@ function resize() {
   canvas.height = window.innerHeight;
 }
 resize();
-window.addEventListener("resize", () => {
-  resize();
-  init();
-});
+let resizeRaf = 0;
+window.addEventListener(
+  "resize",
+  () => {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
+      resize();
+      init();
+      requestTick();
+    });
+  },
+  { passive: true }
+);
 
 // ---- Physics ---- //
 
@@ -40,6 +56,20 @@ class Point {
 class Chain {
   constructor(text, startX, startY, totalWidth) {
     this.text = text;
+    this.chars = Array.from(text);
+    this.charWidths = new Float32Array(this.chars.length);
+    this.textTotalWidth = 0;
+    this.spaceCount = 0;
+
+    // Cache glyph widths once. This avoids expensive per-frame measureText calls.
+    for (let i = 0; i < this.chars.length; i++) {
+      const ch = this.chars[i];
+      if (ch === " ") this.spaceCount++;
+      const w = ctx.measureText(ch).width;
+      this.charWidths[i] = w;
+      this.textTotalWidth += w;
+    }
+
     this.points = [];
 
     const len = config.linkRestLength;
@@ -47,60 +77,77 @@ class Chain {
     for (let i = 0; i < count; i++) {
       this.points.push(new Point(startX + i * len, startY));
     }
+
+    const segCount = Math.max(0, this.points.length - 1);
+    this._segLen = new Float32Array(segCount);
+    this._segDx = new Float32Array(segCount);
+    this._segDy = new Float32Array(segCount);
+    this._segAngle = new Float32Array(segCount);
   }
 
   draw(ctx) {
     const pts = this.points;
     if (pts.length < 2) return;
 
-    ctx.font = `${config.fontSize}px ${config.fontFamily}`;
-    ctx.fillStyle = config.textColor;
-    // ctx.textBaseline = 'alphabetic';
-    ctx.textBaseline = "middle";
+    const segCount = pts.length - 1;
+    const segLen = this._segLen;
+    const segDx = this._segDx;
+    const segDy = this._segDy;
+    const segAngle = this._segAngle;
 
-    const chars = this.text.split("");
-    const charWidths = chars.map((c) => ctx.measureText(c).width);
-    const textTotalWidth = charWidths.reduce((s, w) => s + w, 0);
-
-    const segLengths = [];
     let totalArc = 0;
-    for (let i = 0; i < pts.length - 1; i++) {
+    for (let i = 0; i < segCount; i++) {
       const dx = pts[i + 1].x - pts[i].x;
       const dy = pts[i + 1].y - pts[i].y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      segLengths.push(d);
+      segDx[i] = dx;
+      segDy[i] = dy;
+      const d = Math.hypot(dx, dy) || 0.0001;
+      segLen[i] = d;
+      segAngle[i] = Math.atan2(dy, dx);
       totalArc += d;
     }
 
-    const spaceCount = chars.filter((c) => c === " ").length;
-    const extraPerSpace = spaceCount > 0 ? (totalArc - textTotalWidth) / spaceCount : 0;
+    const extraPerSpace =
+      this.spaceCount > 0 ? (totalArc - this.textTotalWidth) / this.spaceCount : 0;
+
+    const chars = this.chars;
+    const charWidths = this.charWidths;
 
     let cursor = 0;
+    let seg = 0;
+    let arc = 0;
+    let prevPos = -Infinity;
 
     for (let ci = 0; ci < chars.length; ci++) {
-      const cw = charWidths[ci] + (chars[ci] === " " ? extraPerSpace : 0);
+      const ch = chars[ci];
+      const cw = charWidths[ci] + (ch === " " ? extraPerSpace : 0);
       const pos = cursor + cw * 0.5;
       cursor += cw;
 
       if (pos < 0 || pos > totalArc) continue;
 
-      let arc = 0,
+      // Cursor should move forward; if it doesn't, fall back to a safe search.
+      if (pos < prevPos) {
         seg = 0;
-      while (seg < segLengths.length - 1 && arc + segLengths[seg] < pos) {
-        arc += segLengths[seg++];
+        arc = 0;
+      }
+      prevPos = pos;
+
+      while (seg < segCount - 1 && arc + segLen[seg] < pos) {
+        arc += segLen[seg];
+        seg++;
       }
 
-      const t = segLengths[seg] > 0 ? (pos - arc) / segLengths[seg] : 0;
+      const t = segLen[seg] > 0 ? (pos - arc) / segLen[seg] : 0;
       const a = pts[seg];
-      const b = pts[Math.min(seg + 1, pts.length - 1)];
-      const gx = a.x + (b.x - a.x) * t;
-      const gy = a.y + (b.y - a.y) * t;
-      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      const gx = a.x + segDx[seg] * t;
+      const gy = a.y + segDy[seg] * t;
+      const angle = segAngle[seg];
 
       ctx.save();
       ctx.translate(gx, gy);
       ctx.rotate(angle);
-      ctx.fillText(chars[ci], -cw * 0.5, 0);
+      ctx.fillText(ch, -cw * 0.5, 0);
       ctx.restore();
     }
   }
@@ -115,6 +162,9 @@ function solve(chains, circleX, circleY, circleR, floorY) {
   const minDist2 = minDist * minDist;
   const W = canvas.width;
   const iters = config.constraintIterations;
+  const halfGlyph = config.fontSize * 0.3;
+  const circlePush = circleR + halfGlyph;
+  const circlePush2 = circlePush * circlePush;
 
   for (let iter = 0; iter < iters; iter++) {
     // intra-chain link constraints
@@ -164,14 +214,13 @@ function solve(chains, circleX, circleY, circleR, floorY) {
     // boundary constraints — last so they're never overridden
     for (const chain of chains)
       for (const p of chain.points) {
-        const halfGlyph = config.fontSize * 0.3;
         const dx = p.x - circleX;
         const dy = p.y - circleY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < circleR + halfGlyph && dist > 0) {
-          const push = circleR + halfGlyph;
-          p.x = circleX + (dx / dist) * push;
-          p.y = circleY + (dy / dist) * push;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < circlePush2 && d2 > 0) {
+          const dist = Math.sqrt(d2);
+          p.x = circleX + (dx / dist) * circlePush;
+          p.y = circleY + (dy / dist) * circlePush;
           p.px = p.x - (p.x - p.px) * config.circleFriction;
           p.py = p.y - (p.y - p.py) * config.circleFriction;
         }
@@ -269,14 +318,25 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
     frozen = !frozen;
+    requestTick();
   }
   if (e.code === "KeyR") {
     frozen = true;
     init();
+    requestTick();
   }
 });
 
 // ---- Loop ---- //
+
+let rafId = 0;
+function requestTick() {
+  if (rafId) return;
+  rafId = requestAnimationFrame(() => {
+    rafId = 0;
+    loop();
+  });
+}
 
 function loop() {
   const W = canvas.width;
@@ -290,9 +350,9 @@ function loop() {
     for (const chain of chains) {
       for (const p of chain.points) p.integrate(config.gravity, config.damping);
     }
-  }
 
-  solve(chains, cx, cy, cr, floor);
+    solve(chains, cx, cy, cr, floor);
+  }
 
   ctx.fillStyle = config.backgroundColor;
   ctx.fillRect(0, 0, W, H);
@@ -305,9 +365,12 @@ function loop() {
   ctx.fillStyle = config.circleColor;
   ctx.fill();
 
+  ctx.font = `${config.fontSize}px ${config.fontFamily}`;
+  ctx.fillStyle = config.textColor;
+  ctx.textBaseline = "middle";
   for (const chain of chains) chain.draw(ctx);
 
-  requestAnimationFrame(loop);
+  if (!frozen) requestTick();
 }
 
-loop();
+requestTick();

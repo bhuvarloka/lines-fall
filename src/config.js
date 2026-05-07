@@ -6,8 +6,8 @@ export const config = {
   textColor: "#000000",
 
   // Physics
-  gravity: 0.4, // px added to vy each frame
-  damping: 0.9, // 0–1; 1 = no drag, 0 = instant stop
+  gravity: 0.7, // px added to vy each frame
+  damping: 0.95, // 0–1; 1 = no drag, 0 = instant stop
   constraintIterations: 12, // solver passes per frame; higher = stiffer chain
   linkRestLength: 12, // px between adjacent chain points
   pointRadius: 8, // collision radius; ~half fontSize keeps chars from overlapping
