@@ -2,7 +2,7 @@
 
 ![Lines Fall](screenshot.png)
 
-A small canvas experiment where lines of text hang in the air, drape around a red circle, and slowly fall to the ground when you let them go.
+Typography meets existential crisis: sentences drift, wrap themselves around a circle for comfort, and eventually let go. Built with JavaScript.
 
 ## Controls
 
