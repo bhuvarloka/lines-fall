@@ -30,7 +30,7 @@ window.addEventListener(
       requestTick();
     });
   },
-  { passive: true }
+  { passive: true },
 );
 
 // ---- Physics ---- //
@@ -108,7 +108,9 @@ class Chain {
     }
 
     const extraPerSpace =
-      this.spaceCount > 0 ? (totalArc - this.textTotalWidth) / this.spaceCount : 0;
+      this.spaceCount > 0
+        ? (totalArc - this.textTotalWidth) / this.spaceCount
+        : 0;
 
     const chars = this.chars;
     const charWidths = this.charWidths;
