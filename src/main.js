@@ -14,24 +14,20 @@ container.appendChild(canvas);
 // ---- Sizing ---- //
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = container.offsetWidth;
+  canvas.height = container.offsetHeight;
 }
 resize();
 let resizeRaf = 0;
-window.addEventListener(
-  "resize",
-  () => {
-    if (resizeRaf) return;
-    resizeRaf = requestAnimationFrame(() => {
-      resizeRaf = 0;
-      resize();
-      init();
-      requestTick();
-    });
-  },
-  { passive: true },
-);
+new ResizeObserver(() => {
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    resize();
+    init();
+    requestTick();
+  });
+}).observe(container);
 
 // ---- Physics ---- //
 
