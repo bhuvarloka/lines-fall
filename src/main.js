@@ -1,6 +1,46 @@
 import { config } from "./config.js";
 import textSource from "./text.txt?raw";
 
+// ---- Simplex noise (2D) ---- //
+// Minimal self-contained implementation; no external dependency needed.
+const _perm = new Uint8Array(512);
+const _grad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+(function seedPerm() {
+  const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) {
+    const j = Math.random() * (i + 1) | 0;
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+  for (let i = 0; i < 512; i++) _perm[i] = p[i & 255];
+})();
+
+function simplex2(xin, yin) {
+  const F2 = 0.5 * (Math.sqrt(3) - 1);
+  const G2 = (3 - Math.sqrt(3)) / 6;
+  const s = (xin + yin) * F2;
+  const i = Math.floor(xin + s);
+  const j = Math.floor(yin + s);
+  const t = (i + j) * G2;
+  const x0 = xin - (i - t);
+  const y0 = yin - (j - t);
+  const [i1, j1] = x0 > y0 ? [1, 0] : [0, 1];
+  const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+  const x2 = x0 - 1 + 2 * G2, y2 = y0 - 1 + 2 * G2;
+  const ii = i & 255, jj = j & 255;
+  let n = 0;
+  for (const [dx, dy, tx, ty] of [
+    [x0, y0, ii, jj], [x1, y1, ii + i1, jj + j1], [x2, y2, ii + 1, jj + 1]
+  ]) {
+    const t2 = 0.5 - dx * dx - dy * dy;
+    if (t2 >= 0) {
+      const g = _grad[_perm[(tx + _perm[ty & 255]) & 255] & 7];
+      n += t2 * t2 * t2 * t2 * (g[0] * dx + g[1] * dy);
+    }
+  }
+  return 70 * n;
+}
+
 const canvas = document.createElement("canvas");
 const ctx =
   canvas.getContext("2d", { alpha: false, desynchronized: true }) ??
@@ -32,19 +72,24 @@ new ResizeObserver(() => {
 // ---- Physics ---- //
 
 class Point {
-  constructor(x, y) {
+  constructor(x, y, noiseOffset) {
     this.x = x;
     this.y = y;
     this.px = x;
     this.py = y;
+    this.noiseOffset = noiseOffset;
   }
 
-  integrate(gravity, damping) {
+  integrate(gravity, damping, tick) {
     const vx = (this.x - this.px) * damping;
     const vy = (this.y - this.py) * damping;
     this.px = this.x;
     this.py = this.y;
-    this.x += vx;
+    const speed2 = vx * vx + vy * vy;
+    const drift = speed2 > 0.01
+      ? simplex2(tick * config.noiseTimeScale + this.noiseOffset, this.y * config.noiseSpatialScale) * config.noiseAmplitude
+      : 0;
+    this.x += vx + drift;
     this.y += vy + gravity;
   }
 }
@@ -67,11 +112,13 @@ class Chain {
     }
 
     this.points = [];
+    // Unique noise offset per chain so each line drifts independently
+    const chainOffset = Math.random() * 100;
 
     const len = config.linkRestLength;
     const count = Math.ceil(totalWidth / len) + 1;
     for (let i = 0; i < count; i++) {
-      this.points.push(new Point(startX + i * len, startY));
+      this.points.push(new Point(startX + i * len, startY, chainOffset + i * 0.5));
     }
 
     const segCount = Math.max(0, this.points.length - 1);
@@ -312,6 +359,7 @@ function init() {
 init();
 
 let frozen = true;
+let tick = 0;
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
@@ -320,6 +368,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.code === "KeyR") {
     frozen = true;
+    tick = 0;
     init();
     requestTick();
   }
@@ -345,8 +394,9 @@ function loop() {
   const floor = H * config.floorY;
 
   if (!frozen) {
+    tick++;
     for (const chain of chains) {
-      for (const p of chain.points) p.integrate(config.gravity, config.damping);
+      for (const p of chain.points) p.integrate(config.gravity, config.damping, tick);
     }
 
     solve(chains, cx, cy, cr, floor);
