@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>lines-fall — palettes</title>
+    <style>
+      :root {
+        --ink: #1a1612;
+        --muted: #8a8278;
+        --line: #e6dfd2;
+        --paper: #f3ece0;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      header {
+        padding: 36px 40px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+      header p { margin: 0; color: var(--muted); max-width: 780px; }
+      header p b { color: var(--ink); font-weight: 600; }
+
+      section { padding: 24px 40px; border-bottom: 1px solid var(--line); }
+      section:last-child { border-bottom: none; }
+      h2 {
+        font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+        color: var(--muted); font-weight: 600;
+        margin: 0 0 14px;
+      }
+
+      /* ---- Pool grid ---- */
+      .pool {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .preview {
+        position: relative;
+        aspect-ratio: 3 / 4;
+        overflow: hidden;
+      }
+      .bg { position: absolute; inset: 0; }
+      .disc {
+        position: absolute;
+        width: 26%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        right: 16%;
+        top: 20%;
+      }
+      .floor {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 18%;
+      }
+      .text-sample {
+        position: absolute;
+        left: 0; right: 0;
+        top: 52%;
+        text-align: center;
+        font-family: Arial, sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        z-index: 2;
+        pointer-events: none;
+      }
+      .text-sample small {
+        display: block; font-weight: 400; font-size: 10px;
+        opacity: 0.72; margin-top: 2px;
+      }
+      .meta {
+        padding: 10px 12px 12px;
+        border-top: 1px solid var(--line);
+      }
+      .meta h3 {
+        margin: 0 0 6px;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex; justify-content: space-between; align-items: baseline;
+      }
+      .meta h3 em {
+        font-style: normal; font-weight: 400;
+        color: var(--muted); font-size: 10px;
+      }
+      .moods {
+        display: flex; gap: 4px; flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .mood {
+        font-size: 9px;
+        padding: 1px 6px;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        color: var(--muted);
+      }
+      .swatches { display: flex; gap: 6px; }
+      .sw {
+        flex: 1;
+        font-size: 9px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        color: var(--muted);
+        line-height: 1.3;
+      }
+      .sw .chip {
+        display: block; height: 18px; border-radius: 3px;
+        border: 1px solid rgba(0,0,0,0.06); margin-bottom: 3px;
+      }
+      .sw .chip.empty { border-style: dashed; background: transparent !important; }
+
+      /* ---- Resolution grid ---- */
+      .resolve {
+        display: grid;
+        grid-template-columns: 100px repeat(5, 1fr);
+        gap: 4px;
+        font-size: 10px;
+      }
+      .resolve .col-head, .resolve .row-head {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        font-weight: 600;
+        padding: 6px 8px;
+      }
+      .resolve .row-head { display: flex; align-items: center; }
+      .resolve .cell {
+        position: relative;
+        aspect-ratio: 1 / 1.1;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .resolve .cell .label {
+        position: absolute;
+        left: 6px; bottom: 6px;
+        font-size: 10px;
+        font-weight: 600;
+        z-index: 2;
+      }
+      .resolve .cell .floor-strip {
+        position: absolute; left: 0; right: 0; bottom: 0;
+        height: 30%;
+      }
+      .resolve .cell .disc-mini {
+        position: absolute;
+        right: 8px; top: 8px;
+        width: 22%; aspect-ratio: 1; border-radius: 50%;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>lines-fall — palette pool</h1>
+      <p>
+        <b>A curated pool of beautiful 3-color flat palettes.</b>
+        Each palette is its own little print, tagged with mood traits
+        (warm/cool, bright/dark, muted/saturated, day/night, rainy/stormy).
+        Time of day and weather don't pin a slot — they form a <b>mood query</b>,
+        and the picker draws a seeded-random palette from the matching subset.
+        Same conditions on the same day always render the same image.
+      </p>
+    </header>
+
+    <section>
+      <h2>Pool · <span id="pool-count"></span></h2>
+      <div class="pool" id="pool"></div>
+    </section>
+
+    <section>
+      <h2>Today's resolution · <span id="seed-info"></span></h2>
+      <div class="resolve" id="resolve"></div>
+    </section>
+
+    <script type="module">
+      import {
+        POOL, TIMES, WEATHERS, pickPalette, resolvePalette, pickTextColor
+      } from "./src/palettes.js";
+
+      // --- Pool grid ---
+      const poolEl = document.getElementById("pool");
+      document.getElementById("pool-count").textContent = `${POOL.length} palettes`;
+
+      POOL.forEach((p) => {
+        const r = resolvePalette(p);
+        const isMoon = r.body === "moon";
+        const discLabel = isMoon ? "moon" : "sun";
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="preview">
+            <div class="bg" style="background:${r.background}"></div>
+            ${r.disc ? `<div class="disc" style="background:${r.disc}"></div>` : ""}
+            <div class="floor" style="background:${r.floor}"></div>
+            <div class="text-sample" style="color:${r.text}">
+              lines fall
+              <small>quick brown fox</small>
+            </div>
+          </div>
+          <div class="meta">
+            <h3><span>${r.name}</span><em>${r.disc ? discLabel : "no disc"}</em></h3>
+            <div class="moods">
+              ${(p.moods || []).map((m) => `<span class="mood">${m}</span>`).join("")}
+            </div>
+            <div class="swatches">
+              <div class="sw"><span class="chip" style="background:${r.background}"></span>bg<br>${r.background}</div>
+              <div class="sw"><span class="chip" style="background:${r.floor}"></span>floor<br>${r.floor}</div>
+              ${r.disc
+                ? `<div class="sw"><span class="chip" style="background:${r.disc}"></span>${discLabel}<br>${r.disc}</div>`
+                : `<div class="sw"><span class="chip empty"></span>${discLabel}<br>—</div>`}
+            </div>
+          </div>
+        `;
+        poolEl.appendChild(card);
+      });
+
+      // --- Resolution grid ---
+      const resolveEl = document.getElementById("resolve");
+      const today = new Date();
+      document.getElementById("seed-info").textContent =
+        `seed = ${today.toISOString().slice(0, 10)} · refresh page to compare days`;
+
+      // header row
+      const corner = document.createElement("div");
+      corner.className = "col-head";
+      resolveEl.appendChild(corner);
+      WEATHERS.forEach((w) => {
+        const h = document.createElement("div");
+        h.className = "col-head";
+        h.textContent = w;
+        resolveEl.appendChild(h);
+      });
+
+      TIMES.forEach((t) => {
+        const rh = document.createElement("div");
+        rh.className = "row-head";
+        rh.textContent = t;
+        resolveEl.appendChild(rh);
+
+        WEATHERS.forEach((w) => {
+          const r = pickPalette({ time: t, weather: w });
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.style.background = r.background;
+          cell.title = `${r.name} · ${r.moods?.join(", ") ?? ""}`;
+          cell.innerHTML = `
+            ${r.disc ? `<div class="disc-mini" style="background:${r.disc}"></div>` : ""}
+            <div class="floor-strip" style="background:${r.floor}"></div>
+            <div class="label" style="color:${r.text}">${r.name}</div>
+          `;
+          resolveEl.appendChild(cell);
+        });
+      });
+    </script>
+  </body>
+</html>

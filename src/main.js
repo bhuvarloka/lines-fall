@@ -1,5 +1,27 @@
 import { config } from "./config.js";
 import textSource from "./text.txt?raw";
+import { pickPalette, TIMES, WEATHERS } from "./palettes.js";
+
+// ---- Palette ---- //
+// The palette overrides config colors at runtime. Swap with `setPalette()`.
+// Background stays quiet; floor + disc (and the text on top of them) carry
+// the color. See src/palettes.js for the full grid + selection rules.
+
+let activePalette = pickPalette(); // derived from system time, weather=clear
+
+function applyPalette(p) {
+  activePalette = p;
+  config.backgroundColor = p.background;
+  config.floorColor      = p.floor;
+  config.circleColor     = p.disc ?? p.floor; // hidden via showDisc when null
+  config.textColor       = p.text;
+}
+applyPalette(activePalette);
+
+export function setPalette(time, weather) {
+  applyPalette(pickPalette({ time, weather }));
+  requestTick();
+}
 
 // ---- Simplex noise (2D) ---- //
 // Minimal self-contained implementation; no external dependency needed.
@@ -201,7 +223,7 @@ class Chain {
 // ---- Unified solver ---- //
 
 // All constraints run together each iteration so they can't fight each other.
-function solve(chains, circleX, circleY, circleR, floorY) {
+function solve(chains, circleX, circleY, circleR, floorY, hasDisc) {
   const linkLen = config.linkRestLength;
   const minDist = config.pointRadius * 2;
   const minDist2 = minDist * minDist;
@@ -259,15 +281,17 @@ function solve(chains, circleX, circleY, circleR, floorY) {
     // boundary constraints — last so they're never overridden
     for (const chain of chains)
       for (const p of chain.points) {
-        const dx = p.x - circleX;
-        const dy = p.y - circleY;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < circlePush2 && d2 > 0) {
-          const dist = Math.sqrt(d2);
-          p.x = circleX + (dx / dist) * circlePush;
-          p.y = circleY + (dy / dist) * circlePush;
-          p.px = p.x - (p.x - p.px) * config.circleFriction;
-          p.py = p.y - (p.y - p.py) * config.circleFriction;
+        if (hasDisc) {
+          const dx = p.x - circleX;
+          const dy = p.y - circleY;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < circlePush2 && d2 > 0) {
+            const dist = Math.sqrt(d2);
+            p.x = circleX + (dx / dist) * circlePush;
+            p.y = circleY + (dy / dist) * circlePush;
+            p.px = p.x - (p.x - p.px) * config.circleFriction;
+            p.py = p.y - (p.y - p.py) * config.circleFriction;
+          }
         }
 
         if (p.y > floorY - halfGlyph) {
@@ -360,6 +384,17 @@ init();
 
 let frozen = true;
 let tick = 0;
+let cyclePos = { t: TIMES.indexOf(activePalette.time), w: WEATHERS.indexOf(activePalette.weather) };
+function cycle(axis, dir) {
+  if (axis === "t") cyclePos.t = (cyclePos.t + dir + TIMES.length) % TIMES.length;
+  else              cyclePos.w = (cyclePos.w + dir + WEATHERS.length) % WEATHERS.length;
+  const t = TIMES[cyclePos.t];
+  const w = WEATHERS[cyclePos.w];
+  applyPalette(pickPalette({ time: t, weather: w }));
+  console.log(`[palette] ${t} · ${w} · ${activePalette.name}`);
+  requestTick();
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
@@ -372,6 +407,8 @@ window.addEventListener("keydown", (e) => {
     init();
     requestTick();
   }
+  if (e.code === "BracketRight") cycle("t", e.shiftKey ? -1 : 1); // ] / Shift+] — time
+  if (e.code === "BracketLeft")  cycle("w", e.shiftKey ? -1 : 1); // [ / Shift+[ — weather
 });
 
 // ---- Loop ---- //
@@ -399,7 +436,7 @@ function loop() {
       for (const p of chain.points) p.integrate(config.gravity, config.damping, tick);
     }
 
-    solve(chains, cx, cy, cr, floor);
+    solve(chains, cx, cy, cr, floor, !!activePalette.disc);
   }
 
   ctx.fillStyle = config.backgroundColor;
@@ -408,10 +445,12 @@ function loop() {
   ctx.fillStyle = config.floorColor;
   ctx.fillRect(0, floor, W, H - floor);
 
-  ctx.beginPath();
-  ctx.arc(cx, cy, cr, 0, Math.PI * 2);
-  ctx.fillStyle = config.circleColor;
-  ctx.fill();
+  if (activePalette.disc) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.fillStyle = config.circleColor;
+    ctx.fill();
+  }
 
   ctx.font = `${config.fontSize}px ${config.fontFamily}`;
   ctx.fillStyle = config.textColor;

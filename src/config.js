@@ -7,7 +7,7 @@ export const config = {
 
   // ---- Circle Obstacle ---- //
 
-  circleDiameter: 64,
+  circleDiameter: 128,
   circleColor: "#ff0000",
   circleFriction: 0, // ↓ friction, ↑ frictionless, 0–1
 
@@ -15,7 +15,7 @@ export const config = {
   textStartY: 0.15,
   lineSpacingY: 0.05,
   circleX: 0.5,
-  circleY: 0.45,
+  circleY: 0.7,
   textMarginX: 0.1,
   floorY: 0.9,
 
