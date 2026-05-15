@@ -97,12 +97,38 @@ class Point {
   constructor(x, y, noiseOffset) {
     this.x = x;
     this.y = y;
+    this.ox = x;
+    this.oy = y;
     this.px = x;
     this.py = y;
     this.noiseOffset = noiseOffset;
+    this.returning = false;
+    this.returned = false;
   }
 
   integrate(gravity, damping, tick) {
+    if (this.returned) return;
+
+    if (this.returning) {
+      const dx = this.ox - this.x;
+      const dy = this.oy - this.y;
+      const dist2 = dx * dx + dy * dy;
+      if (dist2 < config.returnSnapDist * config.returnSnapDist) {
+        this.x = this.ox;
+        this.y = this.oy;
+        this.px = this.ox;
+        this.py = this.oy;
+        this.returned = true;
+        return;
+      }
+      const k = config.returnSpring;
+      this.px = this.x;
+      this.py = this.y;
+      this.x += dx * k;
+      this.y += dy * k;
+      return;
+    }
+
     const vx = (this.x - this.px) * damping;
     const vy = (this.y - this.py) * damping;
     this.px = this.x;
@@ -148,6 +174,12 @@ class Chain {
     this._segDx = new Float32Array(segCount);
     this._segDy = new Float32Array(segCount);
     this._segAngle = new Float32Array(segCount);
+  }
+
+  tickReturn(tick) {
+    if (tick >= config.returnDelay + this.index * config.returnStagger) {
+      for (const p of this.points) p.returning = true;
+    }
   }
 
   draw(ctx) {
@@ -376,7 +408,9 @@ function init() {
     const isLast = i === lines.length - 1;
     const chainW = isLast ? textW : maxW;
     const y = H * config.textStartY + i * H * config.lineSpacingY;
-    return new Chain(text, marginX, y, chainW);
+    const chain = new Chain(text, marginX, y, chainW);
+    chain.index = i;
+    return chain;
   });
 }
 
@@ -434,6 +468,7 @@ function loop() {
     tick++;
     for (const chain of chains) {
       for (const p of chain.points) p.integrate(config.gravity, config.damping, tick);
+      chain.tickReturn(tick);
     }
 
     solve(chains, cx, cy, cr, floor, !!activePalette.disc);
