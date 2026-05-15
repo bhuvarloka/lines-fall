@@ -15,7 +15,7 @@ export const config = {
   textStartY: 0.15,
   lineSpacingY: 0.05,
   circleX: 0.5,
-  circleY: 0.7,
+  circleY: 0.45,
   textMarginX: 0.1,
   floorY: 0.9,
 
